@@ -13,6 +13,13 @@ app.use('/screenshots', express.static('screenshots'));
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 if (!fs.existsSync(SCREENSHOTS_DIR)) fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
 
+const PUPPETEER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+];
+
 const BREAKPOINTS = {
   desktop: { width: 1440, height: 900 },
   tablet:  { width: 768,  height: 1024 },
@@ -59,7 +66,7 @@ app.post('/api/discover', async (req, res) => {
   let browser;
   try {
     const base = new URL(url);
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    browser = await puppeteer.launch({ headless: true, args: PUPPETEER_ARGS });
     const page = await browser.newPage();
     await page.setViewport(BREAKPOINTS.desktop);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -139,7 +146,7 @@ app.post('/api/screenshot', async (req, res) => {
 
   // Stream progress via SSE — but since we're REST here, collect and return
   try {
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    browser = await puppeteer.launch({ headless: true, args: PUPPETEER_ARGS });
 
     for (const { url, label } of pages) {
       for (const bp of breakpoints) {
@@ -209,7 +216,7 @@ app.post('/api/screenshot-stream', async (req, res) => {
   let browser;
   let done = 0;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    browser = await puppeteer.launch({ headless: true, args: PUPPETEER_ARGS });
 
     for (const { url, label } of pages) {
       for (const bp of breakpoints) {
