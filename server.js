@@ -21,9 +21,10 @@ const PUPPETEER_ARGS = [
 ];
 
 const BREAKPOINTS = {
-  desktop: { width: 1440, height: 900 },
-  tablet:  { width: 768,  height: 1024 },
-  mobile:  { width: 375,  height: 812 },
+  superwide: { width: 1800, height: 900 },
+  desktop:   { width: 1600, height: 900 },
+  tablet:    { width: 768,  height: 1024 },
+  mobile:    { width: 375,  height: 812 },
 };
 
 const PRIMARY_PAGE_KEYWORDS = [
