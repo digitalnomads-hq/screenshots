@@ -27,6 +27,7 @@
   const delayInput      = document.getElementById('delay-input');
   const delayValue      = document.getElementById('delay-value');
   const hideCookiesCb   = document.getElementById('hide-cookies');
+  const scrollTriggerCb = document.getElementById('scroll-trigger');
   const toast           = document.getElementById('toast');
   const sectionHistory  = document.getElementById('section-history');
   const historyBody     = document.getElementById('history-body');
@@ -178,12 +179,10 @@
   function updateRunSummary() {
     const sel = discoveredPages.filter(p => p._checked);
     const bps = getSelectedBreakpoints();
-    const fmt = getFormat();
-    const multiplier = fmt === 'both' ? 2 : 1;
-    const total = sel.length * bps.length * multiplier;
+    const total = sel.length * bps.length;
     updateCount();
     runSummary.textContent = total > 0
-      ? `${sel.length} page${sel.length !== 1 ? 's' : ''} × ${bps.length} breakpoint${bps.length !== 1 ? 's' : ''}${fmt === 'both' ? ' × 2 formats' : ''} = ${total} file${total !== 1 ? 's' : ''}`
+      ? `${sel.length} page${sel.length !== 1 ? 's' : ''} × ${bps.length} breakpoint${bps.length !== 1 ? 's' : ''} = ${total} screenshot${total !== 1 ? 's' : ''}`
       : 'Select at least one page and one breakpoint';
     btnRun.disabled = total === 0;
   }
@@ -214,14 +213,11 @@
   });
 
   document.querySelectorAll('input[name=bp]').forEach(cb => cb.addEventListener('change', updateRunSummary));
-  document.querySelectorAll('input[name=format]').forEach(r => r.addEventListener('change', updateRunSummary));
 
   function getSelectedBreakpoints() {
     return [...document.querySelectorAll('input[name=bp]:checked')].map(cb => cb.value);
   }
-  function getFormat() {
-    return document.querySelector('input[name=format]:checked')?.value || 'png';
-  }
+  function getFormat() { return 'png'; }
 
   // ── Run screenshots ────────────────────────────────────────────────────────
   btnRun.addEventListener('click', () => runScreenshots());
@@ -229,12 +225,10 @@
   async function runScreenshots() {
     const pages = discoveredPages.filter(p => p._checked).map(p => ({ url: p.url, label: p.label }));
     const breakpoints = getSelectedBreakpoints();
-    const format = getFormat();
     if (!pages.length || !breakpoints.length) return;
 
-    // For 'both', we run two passes
-    const formats = format === 'both' ? ['png', 'pdf'] : [format];
-    const total = pages.length * breakpoints.length * formats.length;
+    const formats = ['png'];
+    const total = pages.length * breakpoints.length;
     let done = 0;
     screenshotResults = [];
     currentSession = null;
@@ -253,6 +247,7 @@
       sessionName: sessionInput.value.trim() || undefined,
       delay: parseInt(delayInput.value, 10),
       hideCookies: hideCookiesCb.checked,
+      scrollTrigger: scrollTriggerCb.checked,
     };
 
     try {
@@ -364,16 +359,12 @@
   }
 
   function renderCard(r, container, existingCard = null) {
-    const isPdf = r.format === 'pdf' || r.filename?.endsWith('.pdf');
     const card = existingCard || document.createElement('div');
     card.className = 'result-card';
     card.innerHTML = `
       <div class="result-thumb">
-        ${isPdf
-          ? `<div class="pdf-placeholder">📄<span>${escHtml(r.label)}</span></div>`
-          : `<img src="${r.file}" alt="${escHtml(r.label)} @ ${r.breakpoint}" loading="lazy" />`
-        }
-        <div class="thumb-overlay">${isPdf ? '📄 Open PDF' : '🔍 View full size'}</div>
+        <img src="${r.file}" alt="${escHtml(r.label)} @ ${r.breakpoint}" loading="lazy" />
+        <div class="thumb-overlay">🔍 View full size</div>
       </div>
       <div class="result-info">
         <div class="result-title">${escHtml(r.label)}</div>
@@ -387,10 +378,7 @@
       </div>
     `;
 
-    card.querySelector('.result-thumb').addEventListener('click', () => {
-      if (isPdf) window.open(r.file, '_blank');
-      else openLightbox(r.file);
-    });
+    card.querySelector('.result-thumb').addEventListener('click', () => openLightbox(r.file));
 
     card.querySelector('.btn-reshoot').addEventListener('click', async (e) => {
       await reshoot(r, card);
@@ -416,7 +404,7 @@
           session: currentSession,
           delay: parseInt(delayInput.value, 10),
           hideCookies: hideCookiesCb.checked,
-          format: r.format || 'png',
+          scrollTrigger: scrollTriggerCb.checked,
         }),
       });
       const data = await res.json();

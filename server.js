@@ -90,12 +90,34 @@ async function dismissCookieBanners(page) {
   } catch {}
 }
 
-async function capturePage(page, filepath, format) {
-  if (format === 'pdf') {
-    await page.pdf({ path: filepath, printBackground: true, format: 'A4' });
-  } else {
-    await page.screenshot({ path: filepath, fullPage: true });
-  }
+async function triggerScrollAnimations(page) {
+  try {
+    await page.evaluate(async () => {
+      await new Promise(resolve => {
+        const distance   = Math.floor(window.innerHeight * 0.75);
+        const interval   = 120; // ms between each scroll step
+        let currentPos   = 0;
+
+        const scrollDown = setInterval(() => {
+          window.scrollBy(0, distance);
+          currentPos += distance;
+
+          if (currentPos >= document.body.scrollHeight) {
+            clearInterval(scrollDown);
+            // Scroll back to top so the screenshot starts from the top
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            setTimeout(resolve, 400);
+          }
+        }, interval);
+      });
+    });
+    // Give animations a moment to settle after scroll-back
+    await new Promise(r => setTimeout(r, 500));
+  } catch {}
+}
+
+async function capturePage(page, filepath) {
+  await page.screenshot({ path: filepath, fullPage: true });
 }
 
 function saveSessionMeta(sessionDir, meta) {
@@ -173,7 +195,7 @@ app.post('/api/discover', async (req, res) => {
 app.post('/api/screenshot-stream', async (req, res) => {
   const {
     pages, breakpoints, sessionName,
-    delay = 0, hideCookies = false, format = 'png',
+    delay = 0, hideCookies = false, scrollTrigger = false,
   } = req.body;
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -193,14 +215,13 @@ app.post('/api/screenshot-stream', async (req, res) => {
   const sessionDir = path.join(SCREENSHOTS_DIR, session);
   fs.mkdirSync(sessionDir, { recursive: true });
 
-  const ext = format === 'pdf' ? 'pdf' : 'png';
   const total = pages.length * breakpoints.length;
   send({ type: 'start', session, total });
 
   const sessionMeta = {
     session,
     createdAt: new Date().toISOString(),
-    delay, hideCookies, format,
+    delay, hideCookies, scrollTrigger,
     results: [],
   };
 
@@ -221,18 +242,19 @@ app.post('/api/screenshot-stream', async (req, res) => {
         try {
           await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
           if (hideCookies) await dismissCookieBanners(page);
-          await new Promise(r => setTimeout(r, delay > 0 ? delay * 1000 : 500));
+          if (scrollTrigger) await triggerScrollAnimations(page);
+          await new Promise(r => setTimeout(r, delay > 0 ? delay * 1000 : 300));
 
-          const filename = `${slugify(url)}_${bp}.${ext}`;
+          const filename = `${slugify(url)}_${bp}.png`;
           const filepath = path.join(sessionDir, filename);
-          await capturePage(page, filepath, format);
+          await capturePage(page, filepath);
 
           done++;
           const result = {
             url, label, breakpoint: bp,
             width: dims.width,
             file: `/screenshots/${session}/${filename}`,
-            filename, format, ok: true,
+            filename, ok: true,
           };
           sessionMeta.results.push(result);
           send({ type: 'screenshot', ...result, done });
@@ -259,7 +281,7 @@ app.post('/api/screenshot-stream', async (req, res) => {
 // ─── Re-shoot single page ────────────────────────────────────────────────────
 
 app.post('/api/reshoot', async (req, res) => {
-  const { url, label, breakpoint, session, delay = 0, hideCookies = false, format = 'png' } = req.body;
+  const { url, label, breakpoint, session, delay = 0, hideCookies = false, scrollTrigger = false } = req.body;
   if (!url || !breakpoint || !session) return res.status(400).json({ error: 'Missing required fields' });
 
   const dims = BREAKPOINTS[breakpoint];
@@ -268,8 +290,7 @@ app.post('/api/reshoot', async (req, res) => {
   const sessionDir = path.join(SCREENSHOTS_DIR, session);
   if (!fs.existsSync(sessionDir)) return res.status(404).json({ error: 'Session not found' });
 
-  const ext = format === 'pdf' ? 'pdf' : 'png';
-  const filename = `${slugify(url)}_${breakpoint}.${ext}`;
+  const filename = `${slugify(url)}_${breakpoint}.png`;
   const filepath = path.join(sessionDir, filename);
 
   let browser;
@@ -279,8 +300,9 @@ app.post('/api/reshoot', async (req, res) => {
     await page.setViewport(dims);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
     if (hideCookies) await dismissCookieBanners(page);
-    await new Promise(r => setTimeout(r, delay > 0 ? delay * 1000 : 500));
-    await capturePage(page, filepath, format);
+    if (scrollTrigger) await triggerScrollAnimations(page);
+    await new Promise(r => setTimeout(r, delay > 0 ? delay * 1000 : 300));
+    await capturePage(page, filepath);
     await browser.close();
 
     // Update session.json
@@ -288,7 +310,7 @@ app.post('/api/reshoot', async (req, res) => {
     if (meta) {
       const idx = meta.results.findIndex(r => r.url === url && r.breakpoint === breakpoint);
       const updated = { url, label, breakpoint, width: dims.width,
-        file: `/screenshots/${session}/${filename}`, filename, format, ok: true };
+        file: `/screenshots/${session}/${filename}`, filename, ok: true };
       if (idx >= 0) meta.results[idx] = updated;
       else meta.results.push(updated);
       saveSessionMeta(sessionDir, meta);
@@ -296,9 +318,8 @@ app.post('/api/reshoot', async (req, res) => {
 
     res.json({
       url, label, breakpoint, width: dims.width,
-      // Cache-bust so the browser reloads the new image
       file: `/screenshots/${session}/${filename}?t=${Date.now()}`,
-      filename, format, ok: true,
+      filename, ok: true,
     });
   } catch (err) {
     if (browser) await browser.close().catch(() => {});
@@ -342,7 +363,7 @@ app.get('/api/download/:session', (req, res) => {
   const archive = archiver('zip', { zlib: { level: 6 } });
   archive.on('error', () => res.status(500).end());
   archive.pipe(res);
-  archive.glob('*.{png,pdf}', { cwd: sessionDir }, { prefix: session });
+  archive.glob('*.png', { cwd: sessionDir }, { prefix: session });
   archive.finalize();
 });
 
