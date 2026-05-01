@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DNHQ Screenshot Tool</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Screenshot Tool</h1>
+      <p>Enter a URL to discover pages and capture full-page screenshots at any breakpoint</p>
+    </header>
+
+    <!-- Step 1: URL Input -->
+    <section class="card" id="step-discover">
+      <div class="step-label">Step 1 — Discover pages</div>
+      <div class="url-row">
+        <input
+          type="url"
+          id="url-input"
+          placeholder="https://example.com"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="btn-discover" class="btn btn-primary">Discover</button>
+      </div>
+      <div id="discover-error" class="error hidden"></div>
+    </section>
+
+    <!-- Step 2: Page Selection -->
+    <section class="card hidden" id="step-pages">
+      <div class="step-label">Step 2 — Select pages</div>
+      <div class="pages-header">
+        <span id="pages-count"></span>
+        <div class="bulk-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-select-suggested">Suggested only</button>
+          <button class="btn btn-ghost btn-sm" id="btn-select-all">Select all</button>
+          <button class="btn btn-ghost btn-sm" id="btn-select-none">Clear</button>
+        </div>
+      </div>
+      <div id="pages-list"></div>
+    </section>
+
+    <!-- Step 3: Breakpoints + Run -->
+    <section class="card hidden" id="step-options">
+      <div class="step-label">Step 3 — Breakpoints &amp; options</div>
+      <div class="options-grid">
+        <div class="breakpoints">
+          <label class="group-label">Breakpoints</label>
+          <label class="bp-check">
+            <input type="checkbox" name="bp" value="desktop" checked>
+            <span class="bp-badge desktop">Desktop</span>
+            <span class="bp-dim">1440 × 900</span>
+          </label>
+          <label class="bp-check">
+            <input type="checkbox" name="bp" value="tablet">
+            <span class="bp-badge tablet">Tablet</span>
+            <span class="bp-dim">768 × 1024</span>
+          </label>
+          <label class="bp-check">
+            <input type="checkbox" name="bp" value="mobile">
+            <span class="bp-badge mobile">Mobile</span>
+            <span class="bp-dim">375 × 812</span>
+          </label>
+        </div>
+        <div class="session-name-wrap">
+          <label class="group-label" for="session-input">Session name <span class="muted">(optional)</span></label>
+          <input type="text" id="session-input" placeholder="my-client-2025" maxlength="50" />
+        </div>
+      </div>
+      <div class="run-row">
+        <button id="btn-run" class="btn btn-primary btn-lg">Take Screenshots</button>
+        <span id="run-summary"></span>
+      </div>
+    </section>
+
+    <!-- Progress -->
+    <section class="card hidden" id="step-progress">
+      <div class="step-label">Capturing…</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+      <div id="progress-log"></div>
+    </section>
+
+    <!-- Results -->
+    <section class="card hidden" id="step-results">
+      <div class="results-header">
+        <div class="step-label">Results</div>
+        <div class="results-actions">
+          <a class="btn btn-primary btn-sm hidden" id="btn-download-all" download>Download all (.zip)</a>
+          <button class="btn btn-ghost btn-sm" id="btn-new">Start over</button>
+        </div>
+      </div>
+      <div id="results-tabs" class="results-tabs"></div>
+      <div id="results-grid" class="results-grid"></div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

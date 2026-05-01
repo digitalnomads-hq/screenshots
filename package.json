@@ -1,0 +1,16 @@
+{
+  "name": "dnhq-screenshots",
+  "version": "1.0.0",
+  "description": "Web app to discover and screenshot website pages at multiple breakpoints",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.18.2",
+    "puppeteer": "^21.11.0"
+  }
+}
