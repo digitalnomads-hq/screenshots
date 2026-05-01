@@ -1,29 +1,110 @@
 (() => {
-  // State
+  // ── State ──────────────────────────────────────────────────────────────────
   let discoveredPages = [];
   let screenshotResults = [];
+  let currentSession = null;
   let activeTab = 'all';
 
-  // Elements
-  const urlInput       = document.getElementById('url-input');
-  const btnDiscover    = document.getElementById('btn-discover');
-  const discoverError  = document.getElementById('discover-error');
-  const stepPages      = document.getElementById('step-pages');
-  const stepOptions    = document.getElementById('step-options');
-  const stepProgress   = document.getElementById('step-progress');
-  const stepResults    = document.getElementById('step-results');
-  const pagesList      = document.getElementById('pages-list');
-  const pagesCount     = document.getElementById('pages-count');
-  const btnRun         = document.getElementById('btn-run');
-  const runSummary     = document.getElementById('run-summary');
-  const progressBar    = document.getElementById('progress-bar');
-  const progressLog    = document.getElementById('progress-log');
-  const resultsTabs       = document.getElementById('results-tabs');
-  const resultsGrid       = document.getElementById('results-grid');
-  const sessionInput      = document.getElementById('session-input');
-  const btnDownloadAll    = document.getElementById('btn-download-all');
+  // ── Elements ───────────────────────────────────────────────────────────────
+  const urlInput        = document.getElementById('url-input');
+  const btnDiscover     = document.getElementById('btn-discover');
+  const discoverError   = document.getElementById('discover-error');
+  const stepPages       = document.getElementById('step-pages');
+  const stepOptions     = document.getElementById('step-options');
+  const stepProgress    = document.getElementById('step-progress');
+  const stepResults     = document.getElementById('step-results');
+  const pagesList       = document.getElementById('pages-list');
+  const pagesCount      = document.getElementById('pages-count');
+  const btnRun          = document.getElementById('btn-run');
+  const runSummary      = document.getElementById('run-summary');
+  const progressBar     = document.getElementById('progress-bar');
+  const progressLog     = document.getElementById('progress-log');
+  const resultsTabs     = document.getElementById('results-tabs');
+  const resultsGrid     = document.getElementById('results-grid');
+  const sessionInput    = document.getElementById('session-input');
+  const btnDownloadAll  = document.getElementById('btn-download-all');
+  const btnShare        = document.getElementById('btn-share');
+  const delayInput      = document.getElementById('delay-input');
+  const delayValue      = document.getElementById('delay-value');
+  const hideCookiesCb   = document.getElementById('hide-cookies');
+  const toast           = document.getElementById('toast');
+  const sectionHistory  = document.getElementById('section-history');
+  const historyBody     = document.getElementById('history-body');
+  const historyList     = document.getElementById('history-list');
+  const historyCount    = document.getElementById('history-count');
+  const historyChevron  = document.getElementById('history-chevron');
+  const resultsSession  = document.getElementById('results-session-name');
 
-  // --- Discover ---
+  // ── On load ────────────────────────────────────────────────────────────────
+  loadHistory();
+  checkShareParam();
+
+  // ── Delay slider ───────────────────────────────────────────────────────────
+  delayInput.addEventListener('input', () => {
+    delayValue.textContent = `${delayInput.value}s`;
+  });
+
+  // ── History toggle ─────────────────────────────────────────────────────────
+  document.getElementById('btn-history-toggle').addEventListener('click', () => {
+    const open = !historyBody.classList.contains('hidden');
+    historyBody.classList.toggle('hidden', open);
+    historyChevron.classList.toggle('open', !open);
+  });
+
+  async function loadHistory() {
+    try {
+      const res = await fetch('/api/sessions');
+      const data = await res.json();
+      if (!data.sessions?.length) return;
+
+      historyCount.textContent = data.sessions.length;
+      sectionHistory.style.display = '';
+
+      historyList.innerHTML = '';
+      data.sessions.forEach(s => {
+        const date = s.createdAt ? new Date(s.createdAt).toLocaleString() : 'Unknown date';
+        const count = s.results?.length || 0;
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+          <div class="history-info">
+            <div class="history-name">${escHtml(s.session)}</div>
+            <div class="history-meta">${date} · ${count} screenshot${count !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="history-actions">
+            <button class="btn btn-ghost btn-sm" data-load="${escHtml(s.session)}">Load</button>
+            <a class="btn btn-ghost btn-sm" href="/api/download/${escHtml(s.session)}" download>ZIP</a>
+          </div>
+        `;
+        item.querySelector('[data-load]').addEventListener('click', () => loadSession(s.session));
+        historyList.appendChild(item);
+      });
+    } catch {}
+  }
+
+  async function loadSession(session) {
+    try {
+      const res = await fetch(`/api/sessions/${session}`);
+      const data = await res.json();
+      if (!data.results?.length) return showToast('No screenshots in this session');
+
+      screenshotResults = data.results.filter(r => r.ok);
+      currentSession = session;
+      renderResults();
+      stepResults.classList.remove('hidden');
+      stepResults.scrollIntoView({ behavior: 'smooth' });
+    } catch {
+      showToast('Failed to load session');
+    }
+  }
+
+  // ── Share param on load ────────────────────────────────────────────────────
+  function checkShareParam() {
+    const s = new URLSearchParams(location.search).get('s');
+    if (s) loadSession(s);
+  }
+
+  // ── Discover ───────────────────────────────────────────────────────────────
   btnDiscover.addEventListener('click', () => discover());
   urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') discover(); });
 
@@ -62,7 +143,7 @@
     discoverError.classList.remove('hidden');
   }
 
-  // --- Page List ---
+  // ── Page list ──────────────────────────────────────────────────────────────
   function renderPagesList() {
     pagesList.innerHTML = '';
     discoveredPages.forEach((page, i) => {
@@ -90,18 +171,19 @@
   }
 
   function updateCount() {
-    const total = discoveredPages.length;
     const sel = discoveredPages.filter(p => p._checked).length;
-    pagesCount.textContent = `${total} pages found · ${sel} selected`;
+    pagesCount.textContent = `${discoveredPages.length} pages found · ${sel} selected`;
   }
 
   function updateRunSummary() {
-    const selectedPages = discoveredPages.filter(p => p._checked);
+    const sel = discoveredPages.filter(p => p._checked);
     const bps = getSelectedBreakpoints();
-    const total = selectedPages.length * bps.length;
+    const fmt = getFormat();
+    const multiplier = fmt === 'both' ? 2 : 1;
+    const total = sel.length * bps.length * multiplier;
     updateCount();
     runSummary.textContent = total > 0
-      ? `${selectedPages.length} page${selectedPages.length !== 1 ? 's' : ''} × ${bps.length} breakpoint${bps.length !== 1 ? 's' : ''} = ${total} screenshot${total !== 1 ? 's' : ''}`
+      ? `${sel.length} page${sel.length !== 1 ? 's' : ''} × ${bps.length} breakpoint${bps.length !== 1 ? 's' : ''}${fmt === 'both' ? ' × 2 formats' : ''} = ${total} file${total !== 1 ? 's' : ''}`
       : 'Select at least one page and one breakpoint';
     btnRun.disabled = total === 0;
   }
@@ -131,27 +213,31 @@
     updateRunSummary();
   });
 
-  document.querySelectorAll('input[name=bp]').forEach(cb => {
-    cb.addEventListener('change', updateRunSummary);
-  });
+  document.querySelectorAll('input[name=bp]').forEach(cb => cb.addEventListener('change', updateRunSummary));
+  document.querySelectorAll('input[name=format]').forEach(r => r.addEventListener('change', updateRunSummary));
 
   function getSelectedBreakpoints() {
     return [...document.querySelectorAll('input[name=bp]:checked')].map(cb => cb.value);
   }
+  function getFormat() {
+    return document.querySelector('input[name=format]:checked')?.value || 'png';
+  }
 
-  // --- Run Screenshots ---
+  // ── Run screenshots ────────────────────────────────────────────────────────
   btnRun.addEventListener('click', () => runScreenshots());
 
   async function runScreenshots() {
-    const pages = discoveredPages
-      .filter(p => p._checked)
-      .map(p => ({ url: p.url, label: p.label }));
+    const pages = discoveredPages.filter(p => p._checked).map(p => ({ url: p.url, label: p.label }));
     const breakpoints = getSelectedBreakpoints();
+    const format = getFormat();
     if (!pages.length || !breakpoints.length) return;
 
-    const total = pages.length * breakpoints.length;
+    // For 'both', we run two passes
+    const formats = format === 'both' ? ['png', 'pdf'] : [format];
+    const total = pages.length * breakpoints.length * formats.length;
     let done = 0;
     screenshotResults = [];
+    currentSession = null;
     activeTab = 'all';
 
     stepProgress.classList.remove('hidden');
@@ -161,55 +247,70 @@
     progressLog.innerHTML = '';
     stepProgress.scrollIntoView({ behavior: 'smooth' });
 
+    const opts = {
+      pages,
+      breakpoints,
+      sessionName: sessionInput.value.trim() || undefined,
+      delay: parseInt(delayInput.value, 10),
+      hideCookies: hideCookiesCb.checked,
+    };
+
     try {
-      const res = await fetch('/api/screenshot-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pages,
-          breakpoints,
-          sessionName: sessionInput.value.trim() || undefined,
-        }),
-      });
+      for (const fmt of formats) {
+        // For 'both', reuse same session name on second pass
+        const sName = formats.length > 1 && fmt === 'pdf' && currentSession
+          ? currentSession
+          : opts.sessionName;
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+        const res = await fetch('/api/screenshot-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...opts, sessionName: sName, format: fmt }),
+        });
 
-      while (true) {
-        const { done: streamDone, value } = await reader.read();
-        if (streamDone) break;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop();
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();
 
-        for (const part of parts) {
-          if (!part.startsWith('data: ')) continue;
-          let event;
-          try { event = JSON.parse(part.slice(6)); } catch { continue; }
+          for (const part of parts) {
+            if (!part.startsWith('data: ')) continue;
+            let event;
+            try { event = JSON.parse(part.slice(6)); } catch { continue; }
 
-          if (event.type === 'progress') {
-            addLog(`Capturing ${event.label} @ ${event.breakpoint}…`, 'pending');
-          } else if (event.type === 'screenshot') {
-            done++;
-            progressBar.style.width = `${(done / total) * 100}%`;
-            if (event.ok) {
-              screenshotResults.push(event);
-              addLog(`✓ ${event.label} @ ${event.breakpoint}`, 'ok');
-            } else {
-              addLog(`✗ ${event.label} @ ${event.breakpoint}: ${event.error}`, 'fail');
+            if (event.type === 'start') {
+              currentSession = event.session;
+            } else if (event.type === 'progress') {
+              addLog(`Capturing ${event.label} @ ${event.breakpoint}${formats.length > 1 ? ` (${fmt.toUpperCase()})` : ''}…`, 'pending');
+            } else if (event.type === 'screenshot') {
+              done++;
+              progressBar.style.width = `${(done / total) * 100}%`;
+              if (event.ok) {
+                screenshotResults.push(event);
+                addLog(`✓ ${event.label} @ ${event.breakpoint}${formats.length > 1 ? ` (${fmt.toUpperCase()})` : ''}`, 'ok');
+              } else {
+                addLog(`✗ ${event.label} @ ${event.breakpoint}: ${event.error}`, 'fail');
+              }
+            } else if (event.type === 'done') {
+              if (fmt === formats[formats.length - 1]) {
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                  stepProgress.classList.add('hidden');
+                  renderResults();
+                  stepResults.classList.remove('hidden');
+                  stepResults.scrollIntoView({ behavior: 'smooth' });
+                  loadHistory();
+                }, 600);
+              }
+            } else if (event.type === 'error') {
+              addLog(`Error: ${event.message}`, 'fail');
             }
-          } else if (event.type === 'done') {
-            progressBar.style.width = '100%';
-            setTimeout(() => {
-              stepProgress.classList.add('hidden');
-              renderResults();
-              stepResults.classList.remove('hidden');
-              stepResults.scrollIntoView({ behavior: 'smooth' });
-            }, 600);
-          } else if (event.type === 'error') {
-            addLog(`Error: ${event.message}`, 'fail');
           }
         }
       }
@@ -226,21 +327,18 @@
     progressLog.scrollTop = progressLog.scrollHeight;
   }
 
-  // --- Results ---
+  // ── Results ────────────────────────────────────────────────────────────────
   function renderResults() {
-    const bps = [...new Set(screenshotResults.map(r => r.breakpoint))];
-    const session = screenshotResults[0]?.file?.split('/')[2];
-    if (session) {
-      btnDownloadAll.href = `/api/download/${session}`;
+    if (currentSession) {
+      btnDownloadAll.href = `/api/download/${currentSession}`;
       btnDownloadAll.classList.remove('hidden');
+      resultsSession.textContent = currentSession;
     }
 
-    // Build tabs
+    const bps = [...new Set(screenshotResults.map(r => r.breakpoint))];
     resultsTabs.innerHTML = '';
-    const allBtn = makeTab('all', 'All');
-    resultsTabs.appendChild(allBtn);
+    resultsTabs.appendChild(makeTab('all', 'All'));
     bps.forEach(bp => resultsTabs.appendChild(makeTab(bp, bp.charAt(0).toUpperCase() + bp.slice(1))));
-
     setActiveTab('all');
   }
 
@@ -262,54 +360,129 @@
 
   function renderGrid(results) {
     resultsGrid.innerHTML = '';
-    results.forEach(r => {
-      const card = document.createElement('div');
-      card.className = 'result-card';
-      card.innerHTML = `
-        <div class="result-thumb">
-          <img src="${r.file}" alt="${escHtml(r.label)} @ ${r.breakpoint}" loading="lazy" />
-          <div class="thumb-overlay">🔍 View full size</div>
-        </div>
-        <div class="result-info">
-          <div class="result-title">${escHtml(r.label)}</div>
-          <div class="result-meta">
-            <span class="result-bp ${r.breakpoint}">${r.breakpoint} · ${r.width}px</span>
-            <a class="dl-link" href="${r.file}" download="${r.filename}">Download</a>
+    results.forEach(r => renderCard(r, resultsGrid));
+  }
+
+  function renderCard(r, container, existingCard = null) {
+    const isPdf = r.format === 'pdf' || r.filename?.endsWith('.pdf');
+    const card = existingCard || document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = `
+      <div class="result-thumb">
+        ${isPdf
+          ? `<div class="pdf-placeholder">📄<span>${escHtml(r.label)}</span></div>`
+          : `<img src="${r.file}" alt="${escHtml(r.label)} @ ${r.breakpoint}" loading="lazy" />`
+        }
+        <div class="thumb-overlay">${isPdf ? '📄 Open PDF' : '🔍 View full size'}</div>
+      </div>
+      <div class="result-info">
+        <div class="result-title">${escHtml(r.label)}</div>
+        <div class="result-meta">
+          <span class="result-bp ${r.breakpoint}">${r.breakpoint} · ${r.width}px</span>
+          <div class="card-actions">
+            <button class="btn-reshoot" data-url="${escHtml(r.url)}" data-label="${escHtml(r.label)}" data-bp="${r.breakpoint}">Re-shoot</button>
+            <a class="dl-link" href="${r.file}" download="${r.filename}">↓</a>
           </div>
         </div>
-      `;
-      card.querySelector('.result-thumb').addEventListener('click', () => openLightbox(r.file));
-      resultsGrid.appendChild(card);
-    });
-  }
-
-  // --- Lightbox ---
-  function openLightbox(src) {
-    const lb = document.createElement('div');
-    lb.className = 'lightbox';
-    lb.innerHTML = `
-      <button class="lightbox-close">✕</button>
-      <img src="${src}" alt="Screenshot" />
+      </div>
     `;
-    lb.addEventListener('click', e => { if (e.target === lb) lb.remove(); });
-    lb.querySelector('.lightbox-close').addEventListener('click', () => lb.remove());
-    document.body.appendChild(lb);
+
+    card.querySelector('.result-thumb').addEventListener('click', () => {
+      if (isPdf) window.open(r.file, '_blank');
+      else openLightbox(r.file);
+    });
+
+    card.querySelector('.btn-reshoot').addEventListener('click', async (e) => {
+      await reshoot(r, card);
+    });
+
+    if (!existingCard) container.appendChild(card);
   }
 
-  // --- Start over ---
+  // ── Re-shoot ───────────────────────────────────────────────────────────────
+  async function reshoot(r, card) {
+    const btn = card.querySelector('.btn-reshoot');
+    btn.classList.add('loading');
+    btn.textContent = '…';
+
+    try {
+      const res = await fetch('/api/reshoot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: r.url,
+          label: r.label,
+          breakpoint: r.breakpoint,
+          session: currentSession,
+          delay: parseInt(delayInput.value, 10),
+          hideCookies: hideCookiesCb.checked,
+          format: r.format || 'png',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Update state
+      const idx = screenshotResults.findIndex(x => x.url === r.url && x.breakpoint === r.breakpoint && x.format === r.format);
+      if (idx >= 0) screenshotResults[idx] = data;
+
+      // Re-render card in place
+      renderCard(data, null, card);
+      showToast('Re-shot successfully');
+    } catch (err) {
+      btn.classList.remove('loading');
+      btn.textContent = 'Re-shoot';
+      showToast(`Failed: ${err.message}`);
+    }
+  }
+
+  // ── Share ──────────────────────────────────────────────────────────────────
+  btnShare.addEventListener('click', () => {
+    if (!currentSession) return;
+    const url = `${location.origin}${location.pathname}?s=${currentSession}`;
+    navigator.clipboard.writeText(url).then(() => showToast('Link copied to clipboard'));
+  });
+
+  // ── Start over ─────────────────────────────────────────────────────────────
   document.getElementById('btn-new').addEventListener('click', () => {
     stepResults.classList.add('hidden');
     stepProgress.classList.add('hidden');
     stepOptions.classList.remove('hidden');
     stepPages.classList.remove('hidden');
     btnDownloadAll.classList.add('hidden');
+    resultsSession.textContent = '';
+    // Remove ?s= param from URL without reload
+    history.replaceState({}, '', location.pathname);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
-  // Util
+  // ── Lightbox ───────────────────────────────────────────────────────────────
+  function openLightbox(src) {
+    const lb = document.createElement('div');
+    lb.className = 'lightbox';
+    lb.innerHTML = `<button class="lightbox-close">✕</button><img src="${src}" alt="Screenshot" />`;
+    lb.addEventListener('click', e => { if (e.target === lb) lb.remove(); });
+    lb.querySelector('.lightbox-close').addEventListener('click', () => lb.remove());
+    document.body.appendChild(lb);
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    toast.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.classList.add('hidden'), 250);
+    }, 2500);
+  }
+
+  // ── Util ───────────────────────────────────────────────────────────────────
   function escHtml(str) {
     return String(str ?? '').replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
 })();

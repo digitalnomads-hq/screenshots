@@ -13,17 +13,26 @@
       <p>Enter a URL to discover pages and capture full-page screenshots at any breakpoint</p>
     </header>
 
+    <!-- Session History -->
+    <section class="card" id="section-history" style="display:none">
+      <button class="history-toggle" id="btn-history-toggle">
+        <span class="history-toggle-label">
+          <span class="history-icon">🕘</span>
+          Recent sessions
+          <span class="history-count" id="history-count"></span>
+        </span>
+        <span class="chevron" id="history-chevron">▾</span>
+      </button>
+      <div id="history-body" class="history-body hidden">
+        <div id="history-list"></div>
+      </div>
+    </section>
+
     <!-- Step 1: URL Input -->
     <section class="card" id="step-discover">
       <div class="step-label">Step 1 — Discover pages</div>
       <div class="url-row">
-        <input
-          type="url"
-          id="url-input"
-          placeholder="https://example.com"
-          autocomplete="off"
-          spellcheck="false"
-        />
+        <input type="url" id="url-input" placeholder="https://example.com" autocomplete="off" spellcheck="false" />
         <button id="btn-discover" class="btn btn-primary">Discover</button>
       </div>
       <div id="discover-error" class="error hidden"></div>
@@ -43,10 +52,11 @@
       <div id="pages-list"></div>
     </section>
 
-    <!-- Step 3: Breakpoints + Run -->
+    <!-- Step 3: Breakpoints + Options -->
     <section class="card hidden" id="step-options">
       <div class="step-label">Step 3 — Breakpoints &amp; options</div>
       <div class="options-grid">
+
         <div class="breakpoints">
           <label class="group-label">Breakpoints</label>
           <label class="bp-check">
@@ -65,10 +75,51 @@
             <span class="bp-dim">375 × 812</span>
           </label>
         </div>
-        <div class="session-name-wrap">
-          <label class="group-label" for="session-input">Session name <span class="muted">(optional)</span></label>
-          <input type="text" id="session-input" placeholder="my-client-2025" maxlength="50" />
+
+        <div class="options-right">
+          <div class="session-name-wrap">
+            <label class="group-label" for="session-input">Session name <span class="muted">(optional)</span></label>
+            <input type="text" id="session-input" placeholder="my-client-2025" maxlength="50" />
+          </div>
+
+          <div class="option-row">
+            <label class="group-label">Format</label>
+            <div class="format-btns">
+              <label class="format-btn">
+                <input type="radio" name="format" value="png" checked> PNG
+              </label>
+              <label class="format-btn">
+                <input type="radio" name="format" value="pdf"> PDF
+              </label>
+              <label class="format-btn">
+                <input type="radio" name="format" value="both"> Both
+              </label>
+            </div>
+          </div>
+
+          <div class="option-row">
+            <div class="option-row-header">
+              <label class="group-label" for="delay-input">Capture delay</label>
+              <span class="delay-value" id="delay-value">0s</span>
+            </div>
+            <input type="range" id="delay-input" min="0" max="10" step="1" value="0" class="slider" />
+            <div class="slider-ticks"><span>0s</span><span>5s</span><span>10s</span></div>
+          </div>
+
+          <div class="option-row">
+            <label class="toggle-row">
+              <div class="toggle-wrap">
+                <input type="checkbox" id="hide-cookies" />
+                <span class="toggle"></span>
+              </div>
+              <div>
+                <div class="toggle-label">Hide cookie banners</div>
+                <div class="toggle-sub">Auto-dismisses consent popups before capturing</div>
+              </div>
+            </label>
+          </div>
         </div>
+
       </div>
       <div class="run-row">
         <button id="btn-run" class="btn btn-primary btn-lg">Take Screenshots</button>
@@ -88,8 +139,9 @@
     <!-- Results -->
     <section class="card hidden" id="step-results">
       <div class="results-header">
-        <div class="step-label">Results</div>
+        <div class="step-label">Results <span id="results-session-name" class="session-name-chip"></span></div>
         <div class="results-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-share">Copy link</button>
           <a class="btn btn-primary btn-sm hidden" id="btn-download-all" download>Download all (.zip)</a>
           <button class="btn btn-ghost btn-sm" id="btn-new">Start over</button>
         </div>
@@ -97,7 +149,10 @@
       <div id="results-tabs" class="results-tabs"></div>
       <div id="results-grid" class="results-grid"></div>
     </section>
+
   </div>
+
+  <div class="toast hidden" id="toast"></div>
 
   <script src="app.js"></script>
 </body>
